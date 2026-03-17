@@ -1,0 +1,19 @@
+services:                                  #services that i want to run.
+
+  postgres:
+    image: postgres:15                     #it runs the postgres server version 15
+    container_name: taskqueue-postgres
+    environment:                           #database credentials
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: taskqueue
+    ports:
+      - "5432:5432"                        #connects the comuter to container port
+    volumes:
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql   #Run schema.sql when database starts
+
+  redis:                                   #makes the queue server
+    image: redis:7
+    container_name: taskqueue-redis
+    ports:
+      - "6379:6379"
