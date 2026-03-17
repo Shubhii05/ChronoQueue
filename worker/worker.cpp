@@ -9,7 +9,7 @@ int main() {
     try {
         Redis redis("tcp://127.0.0.1:6379");
 
-        std::cout << "Worker started. Waiting for jobs...\n";
+        std::cout << "Worker started. Waiting for jobs....\n";
 
         while (true) {
             auto result = redis.zpopmax("job_queue");
