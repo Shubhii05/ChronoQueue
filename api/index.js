@@ -1,19 +1,21 @@
-const express = require("express");         //require---> to import modules in node.js 
-                                            //express---> a web framework for Node.js used to build APIs and servers.
-const cors = require("cors");               //cross-origin resource sharing
+// index.js
 
-const app = express();                      //express is a function that creates express application
+const express = require("express");         // import express
+const cors = require("cors");
+
+const app = express();
 const jobsRoute = require("./routes/jobs");
 
 app.use(cors());
-app.use(express.json());                    //converting it into js notation
+app.use(express.json());                    // parse JSON body
 
-app.use("/jobs", jobsRoute);                //(path,router)
+app.use("/jobs", jobsRoute);
 
-app.get("/health", (req, res) => {                                  //api endpoint
+// health check
+app.get("/health", (req, res) => {
     res.json({ status: "Server is running" });
 });
 
-app.listen(5000, () => {                                         //to run the server
-    console.log("API server running on port 5000");
+app.listen(5000, () => {
+    console.log("🚀 API server running on port 5000");
 });

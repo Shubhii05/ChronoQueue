@@ -1,16 +1,21 @@
-const { createClient } = require("redis");       //{ destructuring }
+// redisClient.js
 
-const client = createClient({                    //creating redis client
-  url: "redis://localhost:6379"
+const { createClient } = require("redis");
+
+const client = createClient({
+    url: "redis://redis:6379"   // docker service name
 });
 
 client.on("error", (err) => {
-  console.log("Redis Error", err);
+    console.error("❌ Redis Error:", err);
 });
 
-(async () => {                                  //supports await
-  await client.connect();                       //connecting to redis
-  console.log("Connected to Redis");
+client.on("connect", () => {
+    console.log("✅ Connected to Redis");
+});
+
+(async () => {
+    await client.connect();
 })();
 
 module.exports = client;
