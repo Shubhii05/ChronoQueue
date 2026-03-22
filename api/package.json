@@ -1,18 +1,19 @@
 {
   "name": "api",
   "version": "1.0.0",
-  "description": "",
+  "description": "distributed-task-queue",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
+  "author": "Shubhi Gupta",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",
+    "node-cron": "^4.2.1",
     "pg": "^8.20.0",
     "redis": "^5.11.0",
     "uuid": "^13.0.0"

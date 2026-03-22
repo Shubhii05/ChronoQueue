@@ -1,19 +1,52 @@
-services:                                  #services that i want to run.
+version: "3.8"
+
+services:
 
   postgres:
-    image: postgres:15                     #it runs the postgres server version 15
+    image: postgres:15
     container_name: taskqueue-postgres
-    environment:                           #database credentials
+    environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password
       POSTGRES_DB: taskqueue
     ports:
-      - "5432:5432"                        #connects the comuter to container port
+      - "5432:5432"
     volumes:
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql   #Run schema.sql when database starts
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d taskqueue"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  redis:                                   #makes the queue server
+  redis:
     image: redis:7
     container_name: taskqueue-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./api
+    container_name: taskqueue-api
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
