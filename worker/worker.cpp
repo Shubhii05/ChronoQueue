@@ -13,7 +13,7 @@
 
 using namespace sw::redis;
 
-bool simulate_job(const std::string& type) {
+bool simulate_job(const std::string& type) {        //it shows the fake time execution 
     if (type == "email")
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     else if (type == "payment")

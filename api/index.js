@@ -38,7 +38,7 @@ cron.schedule("*/30 * * * * *", async () => {
         }
 
         if (deadWorkers.rows.length > 0) {
-            console.log(`🪓 Reaped ${deadWorkers.rows.length} workers, requeued ${orphaned.rows.length} jobs`);
+            console.log(`Reaped ${deadWorkers.rows.length} workers, requeued ${orphaned.rows.length} jobs`);
         }
     } catch (err) {
         console.error("Reaper error:", err.message);

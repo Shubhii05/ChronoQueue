@@ -2,7 +2,70 @@ const express = require("express");
 const router  = express.Router();
 const db      = require("../db");
 const redis   = require("../redisClient");
+const multer  = require("multer");
 
+// 📁 File upload config (local storage)
+const upload = multer({ dest: "uploads/" });
+const UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * 🔥 1. VIDEO UPLOAD ENDPOINT (NEW)
+ * Clean UX wrapper for frontend
+ */
+router.post("/upload", upload.single("video"), async (req, res) => {
+    try {
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        // Insert job into DB
+        const result = await db.query(
+            `INSERT INTO jobs (type, payload, priority, idempotency_key, max_retries)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+            [
+                "video_processing",
+                JSON.stringify({ file_path: file.path }),
+                5,
+                file.filename,   // idempotency
+                3
+            ]
+        );
+
+        const job = result.rows[0];
+
+        // Push to Redis queue
+        const base  = (11 - 5) * 1000;
+        const now   = Math.floor(Date.now() / 1000);
+        const score = base + now;
+
+        await redis.zAdd("job_queue", [{ score, value: job.id }]);
+
+        // Log event
+        await db.query(
+            "INSERT INTO job_events (job_id, event, message) VALUES ($1, 'CREATED', $2)",
+            [job.id, "Video uploaded and queued"]
+        );
+
+        return res.status(202).json({
+            message: "Video uploaded & job created",
+            id: job.id,
+            job_id: job.id,
+            status: "queued"
+        });
+
+    } catch (err) {
+        console.error("Upload error:", err);
+        return res.status(500).json({ error: "Upload failed" });
+    }
+});
+
+
+/**
+ * 🧠 2. GENERIC JOB CREATION (EXISTING)
+ */
 router.post("/", async (req, res) => {
     try {
         const {
@@ -22,27 +85,36 @@ router.post("/", async (req, res) => {
             return res.status(400).json({ error: "priority must be 1-10" });
         }
 
+        // Idempotency check
         const existing = await db.query(
             "SELECT * FROM jobs WHERE idempotency_key = $1",
             [idempotency_key]
         );
+
         if (existing.rows.length > 0) {
-            return res.status(200).json({ message: "Job already exists (idempotent)", job: existing.rows[0] });
+            return res.status(200).json({
+                message: "Job already exists (idempotent)",
+                job: existing.rows[0]
+            });
         }
 
+        // Insert job
         const result = await db.query(
             `INSERT INTO jobs (type, payload, priority, idempotency_key, max_retries)
              VALUES ($1, $2, $3, $4, $5) RETURNING *`,
             [type, JSON.stringify(payload), priority, idempotency_key, max_retries]
         );
+
         const job = result.rows[0];
 
+        // Priority score logic
         const base  = (11 - priority) * 1000;
         const now   = Math.floor(Date.now() / 1000);
         const score = base + now + delay_seconds;
 
         await redis.zAdd("job_queue", [{ score, value: job.id }]);
 
+        // Event log
         await db.query(
             "INSERT INTO job_events (job_id, event, message) VALUES ($1, 'CREATED', $2)",
             [job.id, `Queued as ${type} with priority ${priority}`]
@@ -50,6 +122,7 @@ router.post("/", async (req, res) => {
 
         return res.status(202).json({
             message:        "Job accepted",
+            id:             job.id,
             job_id:         job.id,
             status:         "queued",
             priority_score: score
@@ -61,6 +134,10 @@ router.post("/", async (req, res) => {
     }
 });
 
+
+/**
+ * 📊 3. GET ALL JOBS
+ */
 router.get("/", async (req, res) => {
     try {
         const { status, type } = req.query;
@@ -79,13 +156,19 @@ router.get("/", async (req, res) => {
         }
 
         query += " ORDER BY created_at DESC LIMIT 100";
+
         const jobs = await db.query(query, params);
         res.json(jobs.rows);
+
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch jobs" });
     }
 });
 
+
+/**
+ * 🧠 4. WORKER STATUS
+ */
 router.get("/workers/status", async (req, res) => {
     try {
         const result = await db.query(`
@@ -99,28 +182,52 @@ router.get("/workers/status", async (req, res) => {
             FROM workers
             ORDER BY last_heartbeat DESC
         `);
+
         res.json(result.rows);
+
     } catch (err) {
         res.status(500).json({ error: "Failed to fetch workers" });
     }
 });
 
+
+/**
+ * 🔍 5. GET JOB BY ID + EVENTS
+ */
 router.get("/:id", async (req, res) => {
     try {
-        const job = await db.query("SELECT * FROM jobs WHERE id=$1", [req.params.id]);
-        if (job.rows.length === 0) return res.status(404).json({ error: "Job not found" });
+        if (!UUID_PATTERN.test(req.params.id)) {
+            return res.status(400).json({ error: "Invalid job ID" });
+        }
+
+        const job = await db.query(
+            "SELECT * FROM jobs WHERE id=$1",
+            [req.params.id]
+        );
+
+        if (job.rows.length === 0) {
+            return res.status(404).json({ error: "Job not found" });
+        }
 
         const events = await db.query(
             "SELECT * FROM job_events WHERE job_id=$1 ORDER BY created_at ASC",
             [req.params.id]
         );
 
-        res.json({ ...job.rows[0], events: events.rows });
+        res.json({
+            ...job.rows[0],
+            events: events.rows
+        });
+
     } catch (err) {
         res.status(500).json({ error: "Error fetching job" });
     }
 });
 
+
+/**
+ * ☠️ 6. REAPER (DEAD WORKER RECOVERY)
+ */
 router.post("/reap", async (req, res) => {
     try {
         const deadWorkers = await db.query(`
@@ -137,18 +244,30 @@ router.post("/reap", async (req, res) => {
         `);
 
         for (const row of orphaned.rows) {
-            await db.query("UPDATE jobs SET status='queued', worker_id=NULL WHERE id=$1", [row.id]);
+            await db.query(
+                "UPDATE jobs SET status='queued', worker_id=NULL WHERE id=$1",
+                [row.id]
+            );
+
             await db.query(
                 "INSERT INTO job_events (job_id, event, message) VALUES ($1, 'REQUEUED', 'Requeued after worker death')",
                 [row.id]
             );
-            await redis.zAdd("job_queue", [{ score: Math.floor(Date.now() / 1000), value: row.id }]);
+
+            await redis.zAdd("job_queue", [
+                { score: Math.floor(Date.now() / 1000), value: row.id }
+            ]);
         }
 
-        res.json({ dead_workers: deadWorkers.rows.map(r => r.id), requeued_jobs: orphaned.rows.length });
+        res.json({
+            dead_workers: deadWorkers.rows.map(r => r.id),
+            requeued_jobs: orphaned.rows.length
+        });
+
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 module.exports = router;
