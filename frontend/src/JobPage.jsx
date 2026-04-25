@@ -8,6 +8,7 @@ const UUID_PATTERN =
 export default function JobPage() {
   const { id } = useParams();
   const [job, setJob] = useState(null);
+  const [error, setError] = useState("");
   const hasValidJobId = Boolean(id) && UUID_PATTERN.test(id);
 
   useEffect(() => {
@@ -15,11 +16,13 @@ export default function JobPage() {
 
     const fetchJob = async () => {
       try {
+        setError("");
         const res = await getJob(id);
         console.log("JOB DATA:", res.data); // debug
         setJob(res.data);
       } catch (err) {
         console.error(err);
+        setError(err.response?.data?.error || "Failed to fetch job");
       }
     };
 
@@ -31,6 +34,7 @@ export default function JobPage() {
 
   if (!id) return <p>Missing job ID.</p>;
   if (!hasValidJobId) return <p>Invalid job ID.</p>;
+  if (error && !job) return <p>{error}</p>;
   if (!job) return <p>Loading...</p>;
 
   return (

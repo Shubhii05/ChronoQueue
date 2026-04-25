@@ -52,11 +52,18 @@ int main() {
             }
         }
 
-        std::string worker_name = "worker_" + std::to_string(getpid());
+        const char* configured_name = std::getenv("WORKER_NAME");
+        std::string worker_name = configured_name && std::string(configured_name).size() > 0
+            ? std::string(configured_name)
+            : "worker_" + std::to_string(getpid());
         std::string worker_id;
 
         {
             pqxx::work reg(*conn);
+            reg.exec_params(
+                "UPDATE workers SET status='dead' WHERE name=$1",
+                worker_name
+            );
             auto r = reg.exec_params(
                 "INSERT INTO workers (name, status, last_heartbeat) "
                 "VALUES ($1, 'alive', NOW()) "

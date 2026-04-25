@@ -46,6 +46,21 @@ CREATE TABLE dead_letter_jobs (
     failed_at       TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE videos (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    job_id          UUID UNIQUE REFERENCES jobs(id) ON DELETE SET NULL,
+    original_name   TEXT NOT NULL,
+    mime_type       TEXT,
+    size_bytes      BIGINT,
+    storage_bucket  TEXT NOT NULL,
+    storage_path    TEXT NOT NULL,
+    public_url      TEXT,
+    status          TEXT DEFAULT 'queued',
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- helps make query fast
 CREATE INDEX idx_jobs_status       ON jobs(status);
 CREATE INDEX idx_jobs_scheduled_at ON jobs(scheduled_at);
 CREATE INDEX idx_jobs_retry        ON jobs(retry_count);
@@ -53,3 +68,5 @@ CREATE INDEX idx_jobs_idempotency  ON jobs(idempotency_key);
 CREATE INDEX idx_jobs_worker       ON jobs(worker_id);
 CREATE INDEX idx_jobs_type         ON jobs(type);
 CREATE INDEX idx_workers_status    ON workers(status);
+CREATE INDEX idx_videos_job        ON videos(job_id);
+CREATE INDEX idx_videos_created    ON videos(created_at DESC);

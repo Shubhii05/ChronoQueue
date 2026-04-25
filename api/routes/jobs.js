@@ -3,11 +3,79 @@ const router  = express.Router();
 const db      = require("../db");
 const redis   = require("../redisClient");
 const multer  = require("multer");
+const crypto  = require("crypto");
 
 // 📁 File upload config (local storage)
-const upload = multer({ dest: "uploads/" });
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: Number(process.env.MAX_UPLOAD_BYTES || 500 * 1024 * 1024)
+    }
+});
 const UUID_PATTERN =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const SUPABASE_URL = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || "videos";
+
+function requireSupabaseConfig() {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+        const missing = [
+            !SUPABASE_URL ? "SUPABASE_URL" : null,
+            !SUPABASE_SERVICE_ROLE_KEY ? "SUPABASE_SERVICE_ROLE_KEY" : null
+        ].filter(Boolean).join(", ");
+
+        const error = new Error(`Missing Supabase config: ${missing}`);
+        error.statusCode = 500;
+        throw error;
+    }
+}
+
+function safeFileName(name) {
+    return String(name || "video")
+        .replace(/[^a-zA-Z0-9._-]/g, "-")
+        .replace(/-+/g, "-")
+        .slice(0, 120);
+}
+
+function encodeStoragePath(path) {
+    return path.split("/").map(encodeURIComponent).join("/");
+}
+
+async function uploadToSupabase(file) {
+    requireSupabaseConfig();
+
+    const today = new Date().toISOString().slice(0, 10);
+    const storagePath = `uploads/${today}/${crypto.randomUUID()}-${safeFileName(file.originalname)}`;
+    const encodedPath = encodeStoragePath(storagePath);
+    const encodedBucket = encodeURIComponent(SUPABASE_BUCKET);
+
+    const response = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/${encodedBucket}/${encodedPath}`,
+        {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                apikey: SUPABASE_SERVICE_ROLE_KEY,
+                "Content-Type": file.mimetype || "application/octet-stream",
+                "x-upsert": "false"
+            },
+            body: file.buffer
+        }
+    );
+
+    if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`Supabase upload failed (${response.status}): ${body}`);
+    }
+
+    return {
+        bucket: SUPABASE_BUCKET,
+        path: storagePath,
+        publicUrl: `${SUPABASE_URL}/storage/v1/object/public/${encodedBucket}/${encodedPath}`
+    };
+}
 
 /**
  * 🔥 1. VIDEO UPLOAD ENDPOINT (NEW)
@@ -21,20 +89,72 @@ router.post("/upload", upload.single("video"), async (req, res) => {
             return res.status(400).json({ error: "No file uploaded" });
         }
 
-        // Insert job into DB
-        const result = await db.query(
-            `INSERT INTO jobs (type, payload, priority, idempotency_key, max_retries)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [
-                "video_processing",
-                JSON.stringify({ file_path: file.path }),
-                5,
-                file.filename,   // idempotency
-                3
-            ]
-        );
+        const storedFile = await uploadToSupabase(file);
+        const payload = {
+            source: "supabase",
+            bucket: storedFile.bucket,
+            storage_path: storedFile.path,
+            public_url: storedFile.publicUrl,
+            original_name: file.originalname,
+            mime_type: file.mimetype,
+            size_bytes: file.size
+        };
 
-        const job = result.rows[0];
+        const client = await db.connect();
+        let job;
+
+        try {
+            await client.query("BEGIN");
+
+            const result = await client.query(
+                `INSERT INTO jobs (type, payload, priority, idempotency_key, max_retries)
+                 VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                [
+                    "video_processing",
+                    JSON.stringify(payload),
+                    5,
+                    crypto.randomUUID(),
+                    3
+                ]
+            );
+
+            job = result.rows[0];
+
+            await client.query(
+                `INSERT INTO videos (
+                    job_id,
+                    original_name,
+                    mime_type,
+                    size_bytes,
+                    storage_bucket,
+                    storage_path,
+                    public_url,
+                    status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [
+                    job.id,
+                    file.originalname,
+                    file.mimetype,
+                    file.size,
+                    storedFile.bucket,
+                    storedFile.path,
+                    storedFile.publicUrl,
+                    "queued"
+                ]
+            );
+
+            await client.query(
+                "INSERT INTO job_events (job_id, event, message) VALUES ($1, 'CREATED', $2)",
+                [job.id, `Video uploaded to Supabase bucket ${storedFile.bucket}`]
+            );
+
+            await client.query("COMMIT");
+        } catch (err) {
+            await client.query("ROLLBACK");
+            throw err;
+        } finally {
+            client.release();
+        }
 
         // Push to Redis queue
         const base  = (11 - 5) * 1000;
@@ -43,22 +163,54 @@ router.post("/upload", upload.single("video"), async (req, res) => {
 
         await redis.zAdd("job_queue", [{ score, value: job.id }]);
 
-        // Log event
-        await db.query(
-            "INSERT INTO job_events (job_id, event, message) VALUES ($1, 'CREATED', $2)",
-            [job.id, "Video uploaded and queued"]
-        );
-
         return res.status(202).json({
             message: "Video uploaded & job created",
             id: job.id,
             job_id: job.id,
-            status: "queued"
+            status: "queued",
+            video: {
+                original_name: file.originalname,
+                size_bytes: file.size,
+                storage_bucket: storedFile.bucket,
+                storage_path: storedFile.path,
+                public_url: storedFile.publicUrl
+            }
         });
 
     } catch (err) {
         console.error("Upload error:", err);
-        return res.status(500).json({ error: "Upload failed" });
+        return res.status(err.statusCode || 500).json({ error: err.message || "Upload failed" });
+    }
+});
+
+router.get("/videos", async (req, res) => {
+    try {
+        const result = await db.query(`
+            SELECT
+                v.id,
+                v.job_id,
+                v.original_name,
+                v.mime_type,
+                v.size_bytes,
+                v.storage_bucket,
+                v.storage_path,
+                v.public_url,
+                COALESCE(j.status, v.status) AS status,
+                j.created_at AS job_created_at,
+                j.started_at,
+                j.completed_at,
+                j.error_message,
+                v.created_at
+            FROM videos v
+            LEFT JOIN jobs j ON j.id = v.job_id
+            ORDER BY v.created_at DESC
+            LIMIT 100
+        `);
+
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Videos fetch error:", err);
+        res.status(500).json({ error: "Failed to fetch videos" });
     }
 });
 

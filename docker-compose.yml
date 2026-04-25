@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
 
   postgres:
@@ -12,6 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - postgres_data:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d taskqueue"]
@@ -34,6 +33,11 @@ services:
     build:
       context: ./api
     container_name: taskqueue-api
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      SUPABASE_BUCKET: ${SUPABASE_BUCKET:-videos}
+      MAX_UPLOAD_BYTES: ${MAX_UPLOAD_BYTES:-524288000}
     ports:
       - "5000:5000"
     depends_on:
@@ -42,11 +46,38 @@ services:
       redis:
         condition: service_healthy
 
-  worker:
+  worker_1:
     build:
       context: ./worker
+    environment:
+      WORKER_NAME: worker_alpha
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  worker_2:
+    build:
+      context: ./worker
+    environment:
+      WORKER_NAME: worker_beta
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker_3:
+    build:
+      context: ./worker
+    environment:
+      WORKER_NAME: worker_gamma
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
