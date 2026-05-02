@@ -1,0 +1,22 @@
+services:
+  - name: chronoqueue-api
+    type: web
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    healthCheckPath: /health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: videos
+      - key: MAX_UPLOAD_BYTES
+        value: "20971520"
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false

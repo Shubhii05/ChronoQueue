@@ -51,6 +51,9 @@ services:
       context: ./worker
     environment:
       WORKER_NAME: worker_alpha
+      environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,6 +65,9 @@ services:
       context: ./worker
     environment:
       WORKER_NAME: worker_beta
+      environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL} 
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +79,9 @@ services:
       context: ./worker
     environment:
       WORKER_NAME: worker_gamma
+      environment:
+      REDIS_URL: ${REDIS_URL}
+      DATABASE_URL: ${DATABASE_URL}
     depends_on:
       postgres:
         condition: service_healthy
