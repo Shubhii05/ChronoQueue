@@ -1,0 +1,32 @@
+FROM ubuntu:22.04
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libhiredis-dev \
+    libpqxx-dev \
+    libpq-dev \
+    curl
+
+WORKDIR /app
+
+RUN git clone https://github.com/sewenew/redis-plus-plus.git && \
+    cd redis-plus-plus && \
+    mkdir build && cd build && \
+    cmake .. && \
+    make && \
+    make install
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+COPY . .
+
+RUN g++ worker.cpp -o worker \
+    -std=c++17 \
+    -lredis++ \
+    -lhiredis \
+    -lpqxx \
+    -lpq
+
+CMD ["./worker"]
