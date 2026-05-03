@@ -44,8 +44,29 @@ export function formatBytes(value) {
 export function formatWorkerLabel(worker, index = 0) {
   const name = String(worker?.name || "").trim();
   const id = String(worker?.id || "").trim();
-  const suffix = id ? id.slice(-4) : `${index + 1}`;
 
-  if (!name) return `worker_${suffix}`;
-  return name;
+  if (!name) return `ChronoQueue Worker ${index + 1}`;
+
+  if (name === "chronoqueue-worker-1") {
+    return "ChronoQueue Worker 1";
+  }
+
+  if (name.startsWith("chronoqueue-worker-")) {
+    const trailingNumber = name.match(/(\d+)$/)?.[1];
+    return trailingNumber
+      ? `ChronoQueue Worker ${trailingNumber}`
+      : "ChronoQueue Worker";
+  }
+
+  if (name.startsWith("api-worker-")) {
+    return "ChronoQueue Worker (Legacy)";
+  }
+
+  if (name.includes("srv-") || name.includes("hibernate-")) {
+    return "ChronoQueue Worker (Legacy)";
+  }
+
+  return name
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }

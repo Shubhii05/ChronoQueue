@@ -52,9 +52,18 @@ export function AppShell({ children }) {
       : location.pathname.startsWith("/job/")
         ? "Job Status"
         : "Dashboard";
-  const visibleWorkers = workers
-    .filter((worker) => worker.status === "alive")
-    .slice(0, 4);
+  const visibleWorkers = Array.from(
+    new Map(
+      workers
+        .filter((worker) => worker.status === "alive")
+        .sort(
+          (left, right) =>
+            new Date(right.last_heartbeat || 0).getTime() -
+            new Date(left.last_heartbeat || 0).getTime()
+        )
+        .map((worker, index) => [formatWorkerLabel(worker, index), worker])
+    ).values()
+  ).slice(0, 4);
 
   return (
     <div className="min-h-screen bg-[#090b11] p-0 text-slate-100 lg:p-3">
@@ -83,7 +92,7 @@ export function AppShell({ children }) {
                   <div key={`${worker.id}-${index}`} className="flex items-center justify-between text-[14px] text-slate-400">
                     <div className="flex items-center gap-3">
                       <span
-                        className={`h-3 w-3 rounded-full ${
+                        className={`h-3 w-3 shrink-0 rounded-full ${
                           worker.status === "alive" ? "bg-[#18d18b]" : "bg-[#ff5257]"
                         }`}
                       />
