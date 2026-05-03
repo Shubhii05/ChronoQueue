@@ -47,9 +47,14 @@ export function formatWorkerLabel(worker, index = 0) {
 
   if (!name) return `ChronoQueue Worker ${index + 1}`;
 
-  if (name === "chronoqueue-worker-1") {
-    return "ChronoQueue Worker 1";
+  const workerAliases = {
+    alpha: "Alpha",
+    beta: "Beta",
+    gamma: "Gamma",
+    "chronoqueue-worker-1": "Alpha",
   }
+
+  if (workerAliases[name]) return workerAliases[name];
 
   if (name.startsWith("chronoqueue-worker-")) {
     const trailingNumber = name.match(/(\d+)$/)?.[1];

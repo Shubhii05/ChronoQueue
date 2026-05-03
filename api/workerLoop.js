@@ -1,5 +1,3 @@
-const os = require("os");
-
 const db = require("./db");
 const redis = require("./redisClient");
 
@@ -10,9 +8,20 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function getWorkerName() {
-  if (process.env.WORKER_NAME) return process.env.WORKER_NAME;
-  return "chronoqueue-worker-1";
+function getWorkerNames() {
+  const configured = String(process.env.WORKER_NAMES || "").trim();
+  if (configured) {
+    return configured
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
+  }
+
+  if (process.env.WORKER_NAME) {
+    return [process.env.WORKER_NAME];
+  }
+
+  return ["alpha", "beta", "gamma"];
 }
 
 function getSimulatedProcessingMs(type) {
@@ -186,8 +195,7 @@ async function processJob(workerId, job) {
   console.log(`Processed job ${job.id} (${job.type})`);
 }
 
-function startWorkerLoop() {
-  const workerName = getWorkerName();
+function startSingleWorker(workerName) {
   let workerId = null;
   let stopped = false;
   let running = false;
@@ -244,12 +252,17 @@ function startWorkerLoop() {
         console.error("Worker interval error:", err.message);
       }), POLL_INTERVAL_MS);
     } catch (err) {
-      console.error("Failed to start embedded worker:", err.message);
+      console.error(`Failed to start embedded worker ${workerName}:`, err.message);
     }
   })();
 
   process.on("SIGTERM", stop);
   process.on("SIGINT", stop);
+}
+
+function startWorkerLoop() {
+  const workerNames = getWorkerNames();
+  workerNames.forEach((workerName) => startSingleWorker(workerName));
 }
 
 module.exports = {
