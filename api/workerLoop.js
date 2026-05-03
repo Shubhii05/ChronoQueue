@@ -12,7 +12,7 @@ function sleep(ms) {
 
 function getWorkerName() {
   if (process.env.WORKER_NAME) return process.env.WORKER_NAME;
-  return `api-worker-${os.hostname()}-${process.pid}`;
+  return "chronoqueue-worker-1";
 }
 
 function getSimulatedProcessingMs(type) {
