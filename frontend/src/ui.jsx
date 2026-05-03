@@ -2,7 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { fetchWorkers } from "./dashboardApi";
-import { formatWorkerLabel } from "./formatters";
+import { formatWorkerLabel, isManagedWorker } from "./formatters";
 
 const MotionSection = motion.section;
 const MotionButton = motion.button;
@@ -55,7 +55,7 @@ export function AppShell({ children }) {
   const visibleWorkers = Array.from(
     new Map(
       workers
-        .filter((worker) => worker.status === "alive")
+        .filter((worker) => worker.status === "alive" && isManagedWorker(worker))
         .sort(
           (left, right) =>
             new Date(right.last_heartbeat || 0).getTime() -
@@ -107,7 +107,7 @@ export function AppShell({ children }) {
 
             <div className="border-t border-[#20263a] px-7 py-6 text-sm text-slate-600">
               <p>postgres Â· redis</p>
-              <p className="mt-1">{workers.filter((worker) => worker.status === "alive").length} alive</p>
+              <p className="mt-1">{workers.filter((worker) => worker.status === "alive" && isManagedWorker(worker)).length} alive</p>
             </div>
           </div>
         </aside>

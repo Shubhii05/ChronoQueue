@@ -3,6 +3,7 @@ const redis = require("./redisClient");
 
 const POLL_INTERVAL_MS = Number(process.env.WORKER_POLL_MS || 2000);
 const HEARTBEAT_INTERVAL_MS = Number(process.env.WORKER_HEARTBEAT_MS || 5000);
+const DEFAULT_WORKER_NAMES = ["alpha", "beta", "gamma"];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,7 +22,17 @@ function getWorkerNames() {
     return [process.env.WORKER_NAME];
   }
 
-  return ["alpha", "beta", "gamma"];
+  return DEFAULT_WORKER_NAMES;
+}
+
+async function retireNonManagedWorkers(workerNames) {
+  await db.query(
+    `UPDATE workers
+     SET status = 'dead', last_heartbeat = NOW()
+     WHERE status = 'alive'
+       AND name <> ALL($1::text[])`,
+    [workerNames]
+  );
 }
 
 function getSimulatedProcessingMs(type) {
@@ -262,6 +273,9 @@ function startSingleWorker(workerName) {
 
 function startWorkerLoop() {
   const workerNames = getWorkerNames();
+  retireNonManagedWorkers(workerNames).catch((err) => {
+    console.error("Failed to retire legacy workers:", err.message);
+  });
   workerNames.forEach((workerName) => startSingleWorker(workerName));
 }
 

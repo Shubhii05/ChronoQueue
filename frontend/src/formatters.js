@@ -75,3 +75,8 @@ export function formatWorkerLabel(worker, index = 0) {
     .replace(/[-_]+/g, " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
+
+export function isManagedWorker(worker) {
+  const name = String(worker?.name || "").trim().toLowerCase();
+  return name === "alpha" || name === "beta" || name === "gamma";
+}
