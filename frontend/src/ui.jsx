@@ -9,6 +9,28 @@ const MotionButton = motion.button;
 const MotionSpan = motion.span;
 const MotionDiv = motion.div;
 
+const NAV_ITEMS = [
+  { to: "/", label: "Dashboard", shortLabel: "Home", dotClass: "bg-[#3B82F6]" },
+  { to: "/upload", label: "Upload", shortLabel: "Upload", dotClass: "bg-[#64748B]" },
+  { to: "/videos", label: "My Videos", shortLabel: "Videos", dotClass: "bg-[#14B8A6]" },
+  {
+    to: "/jobs",
+    label: "Job Status",
+    shortLabel: "Jobs",
+    dotClass: "bg-[#F59E0B]",
+    jobsSection: true,
+  },
+  { to: "/dead-letter", label: "Dead Letter", shortLabel: "Dead", dotClass: "bg-[#EF4444]" },
+];
+
+function isNavActive(pathname, item) {
+  if (item.jobsSection) {
+    return pathname === "/jobs" || pathname.startsWith("/job/");
+  }
+  if (item.to === "/") return pathname === "/";
+  return pathname === item.to;
+}
+
 export function AppShell({ children }) {
   const location = useLocation();
   const [workers, setWorkers] = useState([]);
@@ -78,11 +100,9 @@ export function AppShell({ children }) {
 
           <div className="flex flex-1 flex-col justify-between px-0 py-0">
             <div className="px-0 py-4">
-              <SidebarEntry to="/" label="Dashboard" dotClass="bg-[#3B82F6]" />
-              <SidebarEntry to="/upload" label="Upload" dotClass="bg-[#64748B]" />
-              <SidebarEntry to="/videos" label="My Videos" dotClass="bg-[#14B8A6]" />
-              <SidebarEntry to="/jobs" label="Job Status" dotClass="bg-[#F59E0B]" />
-              <SidebarEntry to="/dead-letter" label="Dead Letter" dotClass="bg-[#EF4444]" />
+              {NAV_ITEMS.map((item) => (
+                <SidebarEntry key={item.to} item={item} />
+              ))}
             </div>
 
             <div className="border-t border-[#20263a] px-7 py-6">
@@ -124,28 +144,72 @@ export function AppShell({ children }) {
             </div>
           </header>
 
-          <main className="flex-1 p-5 lg:p-6">{children}</main>
+          <main className="flex-1 p-5 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:p-6 lg:pb-6">
+            {children}
+          </main>
+
+          <MobileBottomNav />
         </div>
       </div>
     </div>
   );
 }
 
-function SidebarEntry({ to, label, dotClass }) {
+function MobileBottomNav() {
+  const { pathname } = useLocation();
+
   return (
-    <NavLink to={to} className="block">
-      {({ isActive }) => (
-        <div
-          className={`flex items-center gap-4 px-7 py-5 text-[17px] transition ${
-            isActive
-              ? "bg-[#1a2031] text-slate-100 shadow-[inset_3px_0_0_0_#4d8dff]"
-              : "text-slate-500 hover:bg-[#151a26] hover:text-slate-300"
-          }`}
-        >
-          <span className={`h-3 w-3 rounded-full ${dotClass}`} />
-          <span>{label}</span>
-        </div>
-      )}
+    <nav
+      aria-label="Primary"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#20263a] bg-[#0f1219]/95 backdrop-blur-md lg:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+    >
+      <div className="mx-auto flex max-w-[1620px] justify-between gap-0.5 px-1 pt-1">
+        {NAV_ITEMS.map((item) => {
+          const active = isNavActive(pathname, item);
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/"}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl py-2.5 transition active:opacity-90"
+            >
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full transition ${item.dotClass} ${
+                  active ? "opacity-100 ring-2 ring-white/25" : "opacity-35"
+                }`}
+              />
+              <span
+                className={`max-w-full truncate px-0.5 text-center text-[10px] font-medium leading-tight tracking-tight sm:text-[11px] ${
+                  active ? "text-slate-100" : "text-slate-500"
+                }`}
+              >
+                {item.shortLabel}
+              </span>
+            </NavLink>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function SidebarEntry({ item }) {
+  const { pathname } = useLocation();
+  const active = isNavActive(pathname, item);
+
+  return (
+    <NavLink to={item.to} end={item.to === "/"} className="block">
+      <div
+        className={`flex items-center gap-4 px-7 py-5 text-[17px] transition ${
+          active
+            ? "bg-[#1a2031] text-slate-100 shadow-[inset_3px_0_0_0_#4d8dff]"
+            : "text-slate-500 hover:bg-[#151a26] hover:text-slate-300"
+        }`}
+      >
+        <span className={`h-3 w-3 rounded-full ${item.dotClass}`} />
+        <span>{item.label}</span>
+      </div>
     </NavLink>
   );
 }

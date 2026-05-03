@@ -43,7 +43,6 @@ export function formatBytes(value) {
 
 export function formatWorkerLabel(worker, index = 0) {
   const name = String(worker?.name || "").trim();
-  const id = String(worker?.id || "").trim();
 
   if (!name) return `ChronoQueue Worker ${index + 1}`;
 
