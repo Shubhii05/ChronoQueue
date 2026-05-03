@@ -6,6 +6,7 @@ const app = express();
 const jobsRoute = require("./routes/jobs");
 const db = require("./db");
 const redis = require("./redisClient");
+const { startWorkerLoop } = require("./workerLoop");
 
 app.use(cors());
 app.use(express.json());
@@ -16,14 +17,16 @@ app.get("/health", (req, res) => res.json({ status: "Server is running" }));
 cron.schedule("*/30 * * * * *", async () => {
   try {
     const deadWorkers = await db.query(`
-      UPDATE workers SET status='dead'
+      UPDATE workers
+      SET status = 'dead'
       WHERE last_heartbeat < NOW() - INTERVAL '15 seconds'
-      AND status = 'alive'
+        AND status = 'alive'
       RETURNING id
     `);
 
     const orphaned = await db.query(`
-      SELECT j.id FROM jobs j
+      SELECT j.id
+      FROM jobs j
       JOIN workers w ON j.worker_id = w.id
       WHERE j.status = 'started' AND w.status = 'dead'
     `);
@@ -47,6 +50,8 @@ cron.schedule("*/30 * * * * *", async () => {
   }
 });
 
-// ✅ IMPORTANT FIX FOR RENDER
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 API server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`API server running on port ${PORT}`);
+  startWorkerLoop();
+});
