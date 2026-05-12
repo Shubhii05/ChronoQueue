@@ -23,6 +23,7 @@ const STATUS_PROGRESS = {
   processing: 68,
   completed: 100,
   failed: 100,
+  dead: 100,
 };
 
 export default function JobStatusPage() {

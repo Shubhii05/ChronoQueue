@@ -68,14 +68,68 @@ async function updateVideoStatus(jobId, status) {
 }
 
 async function registerWorker(workerName) {
-  const result = await db.query(
-    `INSERT INTO workers (name, status, last_heartbeat)
-     VALUES ($1, 'alive', NOW())
-     RETURNING id`,
-    [workerName]
-  );
+  const client = await db.connect();
 
-  return result.rows[0].id;
+  try {
+    await client.query("BEGIN");
+
+    const totalsResult = await client.query(
+      `SELECT COALESCE(SUM(jobs_processed), 0) AS total_jobs_processed
+       FROM workers
+       WHERE name = $1`,
+      [workerName]
+    );
+
+    const totalJobsProcessed = Number(totalsResult.rows[0]?.total_jobs_processed || 0);
+
+    const existingResult = await client.query(
+      `SELECT id
+       FROM workers
+       WHERE name = $1
+       ORDER BY last_heartbeat DESC NULLS LAST, created_at DESC
+       LIMIT 1`,
+      [workerName]
+    );
+
+    let workerId = existingResult.rows[0]?.id;
+
+    if (workerId) {
+      await client.query(
+        `UPDATE workers
+         SET status = 'alive',
+             last_heartbeat = NOW(),
+             jobs_processed = $2
+         WHERE id = $1`,
+        [workerId, totalJobsProcessed]
+      );
+
+      await client.query(
+        `UPDATE workers
+         SET status = 'dead'
+         WHERE name = $1
+           AND id <> $2
+           AND status = 'alive'`,
+        [workerName, workerId]
+      );
+    } else {
+      const insertedWorker = await client.query(
+        `INSERT INTO workers (name, status, last_heartbeat, jobs_processed)
+         VALUES ($1, 'alive', NOW(), $2)
+         RETURNING id`,
+        [workerName, totalJobsProcessed]
+      );
+
+      workerId = insertedWorker.rows[0].id;
+    }
+
+    await client.query("COMMIT");
+    return workerId;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function heartbeat(workerId) {

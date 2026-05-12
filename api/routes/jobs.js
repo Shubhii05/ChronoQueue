@@ -293,21 +293,27 @@ router.post("/", async (req, res) => {
 router.get("/", async (req, res) => {
     try {
         const { status, type } = req.query;
-        let query  = "SELECT * FROM jobs";
+        let query  = `
+            SELECT
+                j.*,
+                w.name AS worker_name
+            FROM jobs j
+            LEFT JOIN workers w ON w.id = j.worker_id
+        `;
         const params = [];
 
         if (status && type) {
-            query += " WHERE status=$1 AND type=$2";
+            query += " WHERE j.status=$1 AND j.type=$2";
             params.push(status, type);
         } else if (status) {
-            query += " WHERE status=$1";
+            query += " WHERE j.status=$1";
             params.push(status);
         } else if (type) {
-            query += " WHERE type=$1";
+            query += " WHERE j.type=$1";
             params.push(type);
         }
 
-        query += " ORDER BY created_at DESC LIMIT 100";
+        query += " ORDER BY j.created_at DESC LIMIT 100";
 
         const jobs = await db.query(query, params);
         res.json(jobs.rows);
@@ -324,15 +330,32 @@ router.get("/", async (req, res) => {
 router.get("/workers/status", async (req, res) => {
     try {
         const result = await db.query(`
+            WITH ranked_workers AS (
+                SELECT
+                    id,
+                    name,
+                    status,
+                    last_heartbeat,
+                    EXTRACT(EPOCH FROM (NOW() - last_heartbeat))::int AS seconds_since_heartbeat,
+                    SUM(jobs_processed) OVER (
+                        PARTITION BY COALESCE(NULLIF(TRIM(name), ''), id::text)
+                    )::int AS jobs_processed,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY COALESCE(NULLIF(TRIM(name), ''), id::text)
+                        ORDER BY last_heartbeat DESC NULLS LAST, created_at DESC
+                    ) AS worker_rank
+                FROM workers
+            )
             SELECT
                 id,
                 name,
                 status,
                 jobs_processed,
                 last_heartbeat,
-                EXTRACT(EPOCH FROM (NOW() - last_heartbeat))::int AS seconds_since_heartbeat
-            FROM workers
-            ORDER BY last_heartbeat DESC
+                seconds_since_heartbeat
+            FROM ranked_workers
+            WHERE worker_rank = 1
+            ORDER BY last_heartbeat DESC NULLS LAST
         `);
 
         res.json(result.rows);
@@ -353,7 +376,12 @@ router.get("/:id", async (req, res) => {
         }
 
         const job = await db.query(
-            "SELECT * FROM jobs WHERE id=$1",
+            `SELECT
+                j.*,
+                w.name AS worker_name
+             FROM jobs j
+             LEFT JOIN workers w ON w.id = j.worker_id
+             WHERE j.id = $1`,
             [req.params.id]
         );
 

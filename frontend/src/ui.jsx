@@ -11,7 +11,7 @@ const MotionDiv = motion.div;
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", shortLabel: "Home", dotClass: "bg-[#3B82F6]" },
-  { to: "/upload", label: "Upload", shortLabel: "Upload", dotClass: "bg-[#64748B]" },
+  { to: "/upload", label: "Upload", shortLabel: "Upload", dotClass: "bg-[#64748B]", hideOnMobile: true },
   { to: "/videos", label: "My Videos", shortLabel: "Videos", dotClass: "bg-[#14B8A6]" },
   {
     to: "/jobs",
@@ -135,22 +135,22 @@ export function AppShell({ children }) {
         <div className="flex min-h-screen flex-1 flex-col lg:min-h-[calc(100vh-1.5rem)]">
           <header className="flex min-h-[80px] items-center justify-between border-b border-[#20263a] px-6 lg:px-7">
             <h2 className="text-[1.65rem] font-semibold tracking-[-0.04em] text-white">{pageTitle}</h2>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 sm:gap-6">
               <div className="flex items-center gap-2 rounded-full border border-[#0b654a] bg-[#062d22] px-4 py-2 text-[14px] text-[#18d18b]">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#18d18b]" />
                 Live
               </div>
-              <div className="text-[14px] text-slate-500">{clock}</div>
+              <div className="hidden text-[14px] text-slate-500 sm:block">{clock}</div>
             </div>
           </header>
 
           <main className="flex-1 p-5 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:p-6 lg:pb-6">
             {children}
           </main>
-
-          <MobileBottomNav />
         </div>
       </div>
+      {/* Outside overflow-hidden so mobile browsers don't clip position:fixed */}
+      <MobileBottomNav />
     </div>
   );
 }
@@ -161,11 +161,10 @@ function MobileBottomNav() {
   return (
     <nav
       aria-label="Primary"
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#20263a] bg-[#0f1219]/95 backdrop-blur-md lg:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      className="fixed bottom-0 left-0 right-0 z-[200] border-t border-[#20263a] bg-[#0f1219]/98 pb-[env(safe-area-inset-bottom,0px)] pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md supports-[backdrop-filter]:bg-[#0f1219]/90 lg:hidden"
     >
-      <div className="mx-auto flex max-w-[1620px] justify-between gap-0.5 px-1 pt-1">
-        {NAV_ITEMS.map((item) => {
+      <div className="mx-auto flex max-w-[1620px] justify-between gap-0.5 px-1">
+        {NAV_ITEMS.filter((item) => !item.hideOnMobile).map((item) => {
           const active = isNavActive(pathname, item);
           return (
             <NavLink
@@ -287,9 +286,13 @@ export function StatusBadge({ status }) {
 
 export function StatCard({ label, value, valueClassName = "text-white" }) {
   return (
-    <MotionDiv initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="border-r border-[#20263a] px-7 py-6 last:border-r-0">
+    <MotionDiv
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="border-b border-r border-[#20263a] px-5 py-5 even:border-r-0 xl:border-b-0 xl:border-r xl:px-7 xl:py-6 xl:last:border-r-0"
+    >
       <p className="text-[13px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
-      <div className={`mt-4 text-[44px] font-medium leading-none tracking-[-0.06em] ${valueClassName}`.trim()}>
+      <div className={`mt-4 text-[36px] font-medium leading-none tracking-[-0.06em] sm:text-[44px] ${valueClassName}`.trim()}>
         <AnimatedNumber value={value} />
       </div>
     </MotionDiv>

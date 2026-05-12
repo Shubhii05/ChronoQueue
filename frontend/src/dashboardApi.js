@@ -1,11 +1,7 @@
-import axios from "axios";
-
-const dashboardClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-});
+import { httpClient } from "./httpClient";
 
 export const fetchJobs = (params = {}) =>
-  dashboardClient.get("/jobs", { params });
+  httpClient.get("/jobs", { params });
 
 export const fetchWorkers = () =>
-  dashboardClient.get("/jobs/workers/status");
+  httpClient.get("/jobs/workers/status");
