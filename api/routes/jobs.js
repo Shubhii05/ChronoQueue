@@ -319,7 +319,11 @@ router.get("/", async (req, res) => {
         res.json(jobs.rows);
 
     } catch (err) {
-        res.status(500).json({ error: "Failed to fetch jobs" });
+        console.error("Jobs fetch error:", err);
+        res.status(500).json({
+            error: "Failed to fetch jobs",
+            details: process.env.NODE_ENV === "production" ? undefined : err.message
+        });
     }
 });
 
@@ -361,7 +365,11 @@ router.get("/workers/status", async (req, res) => {
         res.json(result.rows);
 
     } catch (err) {
-        res.status(500).json({ error: "Failed to fetch workers" });
+        console.error("Workers fetch error:", err);
+        res.status(500).json({
+            error: "Failed to fetch workers",
+            details: process.env.NODE_ENV === "production" ? undefined : err.message
+        });
     }
 });
 

@@ -6,6 +6,7 @@ const app = express();
 const jobsRoute = require("./routes/jobs");
 const db = require("./db");
 const redis = require("./redisClient");
+const { ensureDatabase } = require("./dbSetup");
 const { startWorkerLoop } = require("./workerLoop");
 
 app.use(cors());
@@ -13,6 +14,25 @@ app.use(express.json());
 app.use("/jobs", jobsRoute);
 
 app.get("/health", (req, res) => res.json({ status: "Server is running" }));
+
+app.get("/health/details", async (req, res) => {
+  const details = {
+    api: "ok",
+    database: "unknown",
+    redis: redis.isReady ? "ok" : "not_ready"
+  };
+
+  try {
+    await db.query("SELECT 1");
+    details.database = "ok";
+  } catch (err) {
+    details.database = "error";
+    details.database_error = err.message;
+  }
+
+  const status = details.database === "ok" ? 200 : 500;
+  res.status(status).json(details);
+});
 
 cron.schedule("*/30 * * * * *", async () => {
   try {
@@ -51,7 +71,18 @@ cron.schedule("*/30 * * * * *", async () => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`API server running on port ${PORT}`);
-  startWorkerLoop();
-});
+
+async function bootstrap() {
+  try {
+    await ensureDatabase();
+  } catch (err) {
+    console.error("Database setup failed:", err.message);
+  }
+
+  app.listen(PORT, () => {
+    console.log(`API server running on port ${PORT}`);
+    startWorkerLoop();
+  });
+}
+
+bootstrap();
