@@ -77,9 +77,10 @@ export function AppShell({ children }) {
   const visibleWorkers = Array.from(
     new Map(
       workers
-        .filter((worker) => worker.status === "alive" && isManagedWorker(worker))
+        .filter((worker) => isManagedWorker(worker))
         .sort(
           (left, right) =>
+            Number(right.status === "alive") - Number(left.status === "alive") ||
             new Date(right.last_heartbeat || 0).getTime() -
             new Date(left.last_heartbeat || 0).getTime()
         )
@@ -121,7 +122,7 @@ export function AppShell({ children }) {
                     <span className="text-slate-500">{worker.jobs_processed ?? 0}</span>
                   </div>
                 ))}
-                {!visibleWorkers.length ? <p className="text-sm text-slate-600">No live workers reported yet.</p> : null}
+                {!visibleWorkers.length ? <p className="text-sm text-slate-600">No worker history yet.</p> : null}
               </div>
             </div>
 
