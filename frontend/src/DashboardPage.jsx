@@ -60,7 +60,7 @@ export default function DashboardPage() {
     const totalJobs = jobs.length;
     const processing = jobs.filter((job) => job.status === "started").length;
     const completed = jobs.filter((job) => job.status === "completed").length;
-    const deadLetter = jobs.filter((job) => job.status === "failed").length;
+    const deadLetter = jobs.filter((job) => job.status === "dead" || job.is_dead_letter).length;
 
     return { totalJobs, processing, completed, deadLetter };
   }, [jobs]);
@@ -75,7 +75,7 @@ export default function DashboardPage() {
     <div className="space-y-0">
       <Surface className="overflow-hidden rounded-[20px]">
         <div className="border-b border-[#20263a] lg:flex">
-          <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid flex-1 grid-cols-2 xl:grid-cols-4">
             <StatCard label="Total Jobs" value={stats.totalJobs} />
             <StatCard label="Processing" value={stats.processing} valueClassName="text-[#ffb020]" />
             <StatCard label="Completed" value={stats.completed} valueClassName="text-[#18d18b]" />
@@ -115,7 +115,7 @@ export default function DashboardPage() {
                     <StatusBadge status={job.status === "started" ? "processing" : job.status} />
                   </div>
                   <div className="break-all text-[15px] text-slate-500">
-                    {workerNameById.get(job.worker_id) || job.worker_id || "-"}
+                    {workerNameById.get(job.worker_id) || formatWorkerName(job.worker_name) || job.worker_id || "-"}
                   </div>
                 </Link>
               ))}
@@ -154,6 +154,10 @@ export default function DashboardPage() {
       {error ? <div className="mt-6 text-sm text-[#ff7b7f]">{error}</div> : null}
     </div>
   );
+}
+
+function formatWorkerName(name) {
+  return name ? formatWorkerLabel({ name }) : "";
 }
 
 function formatCompactTime(value) {

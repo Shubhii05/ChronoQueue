@@ -2,12 +2,34 @@ import { NavLink, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { fetchWorkers } from "./dashboardApi";
-import { formatWorkerLabel } from "./formatters";
+import { formatWorkerLabel, isManagedWorker } from "./formatters";
 
 const MotionSection = motion.section;
 const MotionButton = motion.button;
 const MotionSpan = motion.span;
 const MotionDiv = motion.div;
+
+const NAV_ITEMS = [
+  { to: "/", label: "Dashboard", shortLabel: "Home", dotClass: "bg-[#3B82F6]" },
+  { to: "/upload", label: "Upload", shortLabel: "Upload", dotClass: "bg-[#64748B]", hideOnMobile: true },
+  { to: "/videos", label: "My Videos", shortLabel: "Videos", dotClass: "bg-[#14B8A6]" },
+  {
+    to: "/jobs",
+    label: "Job Status",
+    shortLabel: "Jobs",
+    dotClass: "bg-[#F59E0B]",
+    jobsSection: true,
+  },
+  { to: "/dead-letter", label: "Dead Letter", shortLabel: "Dead", dotClass: "bg-[#EF4444]" },
+];
+
+function isNavActive(pathname, item) {
+  if (item.jobsSection) {
+    return pathname === "/jobs" || pathname.startsWith("/job/");
+  }
+  if (item.to === "/") return pathname === "/";
+  return pathname === item.to;
+}
 
 export function AppShell({ children }) {
   const location = useLocation();
@@ -52,9 +74,18 @@ export function AppShell({ children }) {
       : location.pathname.startsWith("/job/")
         ? "Job Status"
         : "Dashboard";
-  const visibleWorkers = workers
-    .filter((worker) => worker.status === "alive")
-    .slice(0, 4);
+  const visibleWorkers = Array.from(
+    new Map(
+      workers
+        .filter((worker) => worker.status === "alive" && isManagedWorker(worker))
+        .sort(
+          (left, right) =>
+            new Date(right.last_heartbeat || 0).getTime() -
+            new Date(left.last_heartbeat || 0).getTime()
+        )
+        .map((worker, index) => [formatWorkerLabel(worker, index), worker])
+    ).values()
+  ).slice(0, 4);
 
   return (
     <div className="min-h-screen bg-[#090b11] p-0 text-slate-100 lg:p-3">
@@ -69,11 +100,9 @@ export function AppShell({ children }) {
 
           <div className="flex flex-1 flex-col justify-between px-0 py-0">
             <div className="px-0 py-4">
-              <SidebarEntry to="/" label="Dashboard" dotClass="bg-[#3B82F6]" />
-              <SidebarEntry to="/upload" label="Upload" dotClass="bg-[#64748B]" />
-              <SidebarEntry to="/videos" label="My Videos" dotClass="bg-[#14B8A6]" />
-              <SidebarEntry to="/jobs" label="Job Status" dotClass="bg-[#F59E0B]" />
-              <SidebarEntry to="/dead-letter" label="Dead Letter" dotClass="bg-[#EF4444]" />
+              {NAV_ITEMS.map((item) => (
+                <SidebarEntry key={item.to} item={item} />
+              ))}
             </div>
 
             <div className="border-t border-[#20263a] px-7 py-6">
@@ -83,7 +112,7 @@ export function AppShell({ children }) {
                   <div key={`${worker.id}-${index}`} className="flex items-center justify-between text-[14px] text-slate-400">
                     <div className="flex items-center gap-3">
                       <span
-                        className={`h-3 w-3 rounded-full ${
+                        className={`h-3 w-3 shrink-0 rounded-full ${
                           worker.status === "alive" ? "bg-[#18d18b]" : "bg-[#ff5257]"
                         }`}
                       />
@@ -98,7 +127,7 @@ export function AppShell({ children }) {
 
             <div className="border-t border-[#20263a] px-7 py-6 text-sm text-slate-600">
               <p>postgres Â· redis</p>
-              <p className="mt-1">{workers.filter((worker) => worker.status === "alive").length} alive</p>
+              <p className="mt-1">{workers.filter((worker) => worker.status === "alive" && isManagedWorker(worker)).length} alive</p>
             </div>
           </div>
         </aside>
@@ -106,37 +135,80 @@ export function AppShell({ children }) {
         <div className="flex min-h-screen flex-1 flex-col lg:min-h-[calc(100vh-1.5rem)]">
           <header className="flex min-h-[80px] items-center justify-between border-b border-[#20263a] px-6 lg:px-7">
             <h2 className="text-[1.65rem] font-semibold tracking-[-0.04em] text-white">{pageTitle}</h2>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3 sm:gap-6">
               <div className="flex items-center gap-2 rounded-full border border-[#0b654a] bg-[#062d22] px-4 py-2 text-[14px] text-[#18d18b]">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#18d18b]" />
                 Live
               </div>
-              <div className="text-[14px] text-slate-500">{clock}</div>
+              <div className="hidden text-[14px] text-slate-500 sm:block">{clock}</div>
             </div>
           </header>
 
-          <main className="flex-1 p-5 lg:p-6">{children}</main>
+          <main className="flex-1 p-5 pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:p-6 lg:pb-6">
+            {children}
+          </main>
         </div>
       </div>
+      {/* Outside overflow-hidden so mobile browsers don't clip position:fixed */}
+      <MobileBottomNav />
     </div>
   );
 }
 
-function SidebarEntry({ to, label, dotClass }) {
+function MobileBottomNav() {
+  const { pathname } = useLocation();
+
   return (
-    <NavLink to={to} className="block">
-      {({ isActive }) => (
-        <div
-          className={`flex items-center gap-4 px-7 py-5 text-[17px] transition ${
-            isActive
-              ? "bg-[#1a2031] text-slate-100 shadow-[inset_3px_0_0_0_#4d8dff]"
-              : "text-slate-500 hover:bg-[#151a26] hover:text-slate-300"
-          }`}
-        >
-          <span className={`h-3 w-3 rounded-full ${dotClass}`} />
-          <span>{label}</span>
-        </div>
-      )}
+    <nav
+      aria-label="Primary"
+      className="fixed bottom-0 left-0 right-0 z-[200] border-t border-[#20263a] bg-[#0f1219]/98 pb-[env(safe-area-inset-bottom,0px)] pt-1 shadow-[0_-8px_32px_rgba(0,0,0,0.45)] backdrop-blur-md supports-[backdrop-filter]:bg-[#0f1219]/90 lg:hidden"
+    >
+      <div className="mx-auto flex max-w-[1620px] justify-between gap-0.5 px-1">
+        {NAV_ITEMS.filter((item) => !item.hideOnMobile).map((item) => {
+          const active = isNavActive(pathname, item);
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === "/"}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1 rounded-xl py-2.5 transition active:opacity-90"
+            >
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full transition ${item.dotClass} ${
+                  active ? "opacity-100 ring-2 ring-white/25" : "opacity-35"
+                }`}
+              />
+              <span
+                className={`max-w-full truncate px-0.5 text-center text-[10px] font-medium leading-tight tracking-tight sm:text-[11px] ${
+                  active ? "text-slate-100" : "text-slate-500"
+                }`}
+              >
+                {item.shortLabel}
+              </span>
+            </NavLink>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function SidebarEntry({ item }) {
+  const { pathname } = useLocation();
+  const active = isNavActive(pathname, item);
+
+  return (
+    <NavLink to={item.to} end={item.to === "/"} className="block">
+      <div
+        className={`flex items-center gap-4 px-7 py-5 text-[17px] transition ${
+          active
+            ? "bg-[#1a2031] text-slate-100 shadow-[inset_3px_0_0_0_#4d8dff]"
+            : "text-slate-500 hover:bg-[#151a26] hover:text-slate-300"
+        }`}
+      >
+        <span className={`h-3 w-3 rounded-full ${item.dotClass}`} />
+        <span>{item.label}</span>
+      </div>
     </NavLink>
   );
 }
@@ -214,9 +286,13 @@ export function StatusBadge({ status }) {
 
 export function StatCard({ label, value, valueClassName = "text-white" }) {
   return (
-    <MotionDiv initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} className="border-r border-[#20263a] px-7 py-6 last:border-r-0">
+    <MotionDiv
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="border-b border-r border-[#20263a] px-5 py-5 even:border-r-0 xl:border-b-0 xl:border-r xl:px-7 xl:py-6 xl:last:border-r-0"
+    >
       <p className="text-[13px] uppercase tracking-[0.22em] text-slate-500">{label}</p>
-      <div className={`mt-4 text-[44px] font-medium leading-none tracking-[-0.06em] ${valueClassName}`.trim()}>
+      <div className={`mt-4 text-[36px] font-medium leading-none tracking-[-0.06em] sm:text-[44px] ${valueClassName}`.trim()}>
         <AnimatedNumber value={value} />
       </div>
     </MotionDiv>

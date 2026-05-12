@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchJobs } from "./dashboardApi";
-import { formatDateTime } from "./formatters";
+import { formatDateTime, formatWorkerLabel } from "./formatters";
 import { SectionHeading, StatusBadge, Surface } from "./ui";
 
 export default function JobsPage() {
@@ -66,7 +66,9 @@ export default function JobsPage() {
                   </p>
                 </div>
                 <StatusBadge status={job.status === "started" ? "processing" : job.status} />
-                <span className="break-all text-[14px] text-slate-500">{job.worker_id || "-"}</span>
+                <span className="break-all text-[14px] text-slate-500">
+                  {job.worker_name ? formatWorkerLabel({ name: job.worker_name }) : job.worker_id || "-"}
+                </span>
                 <span className="text-[14px] text-slate-500">{formatDateTime(job.created_at)}</span>
               </Link>
             ))

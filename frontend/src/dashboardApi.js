@@ -1,9 +1,7 @@
-import axios from "axios";
+import { httpClient } from "./httpClient";
 
-const dashboardClient = axios.create({
-  baseURL: "http://localhost:5000",
-});
+export const fetchJobs = (params = {}) =>
+  httpClient.get("/jobs", { params });
 
-export const fetchJobs = (params = {}) => dashboardClient.get("/jobs", { params });
-
-export const fetchWorkers = () => dashboardClient.get("/jobs/workers/status");
+export const fetchWorkers = () =>
+  httpClient.get("/jobs/workers/status");
