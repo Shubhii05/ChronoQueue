@@ -114,7 +114,7 @@ export function AppShell({ children }) {
                     <div className="flex items-center gap-3">
                       <span
                         className={`h-3 w-3 shrink-0 rounded-full ${
-                          worker.status === "alive" ? "bg-[#18d18b]" : "bg-[#ff5257]"
+                          worker.status === "alive" ? "bg-[#18d18b]" : "bg-slate-500"
                         }`}
                       />
                       <span>{formatWorkerLabel(worker, index)}</span>
